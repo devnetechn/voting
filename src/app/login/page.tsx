@@ -20,6 +20,9 @@ const ROLE_TO_DEFAULT_PATH: Record<"admin" | "student", string> = {
   student: "/student-dashboard",
 };
 
+// ✅ Use API URL from .env
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+
 /* ---------------- Client Inner Component ---------------- */
 function LoginInner() {
   const [username, setUsername] = useState("");
@@ -42,7 +45,7 @@ function LoginInner() {
     const controller = new AbortController();
     (async () => {
       try {
-        const r = await fetch("/api/auth/me", {
+        const r = await fetch(`${API_URL}/auth/me`, {
           credentials: "include",
           headers: { Accept: "application/json" },
           cache: "no-store",
@@ -74,7 +77,7 @@ function LoginInner() {
     const t = setTimeout(() => controller.abort(), 8000);
 
     try {
-      const r = await fetch("/api/auth/login", {
+      const r = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -87,7 +90,7 @@ function LoginInner() {
 
       let role = (j.role || j.user?.role || "").toString().toLowerCase();
       if (role !== "admin" && role !== "student") {
-        const meRes = await fetch("/api/auth/me", {
+        const meRes = await fetch(`${API_URL}/auth/me`, {
           credentials: "include",
           cache: "no-store",
         });
