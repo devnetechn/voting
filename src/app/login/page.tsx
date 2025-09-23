@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 
@@ -20,7 +20,8 @@ const ROLE_TO_DEFAULT_PATH: Record<"admin" | "student", string> = {
   student: "/student-dashboard",
 };
 
-export default function LoginPage() {
+/* ---------------- Client Inner Component ---------------- */
+function LoginInner() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,7 +37,7 @@ export default function LoginPage() {
     [nextParam]
   );
 
-  // If already logged in, redirect away from /login
+  // Redirect if already logged in
   useEffect(() => {
     const controller = new AbortController();
     (async () => {
@@ -62,6 +63,7 @@ export default function LoginPage() {
     return () => controller.abort();
   }, [router, nextSafe]);
 
+  // Handle login form submit
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (loading) return;
@@ -80,7 +82,7 @@ export default function LoginPage() {
         signal: controller.signal,
       });
 
-      const j = (await r.json().catch(() => ({}))) as LoginResponse; // ⬅️ no `any`
+      const j = (await r.json().catch(() => ({}))) as LoginResponse;
       if (!r.ok) throw new Error(j?.error || "Login failed");
 
       let role = (j.role || j.user?.role || "").toString().toLowerCase();
@@ -100,9 +102,9 @@ export default function LoginPage() {
       const fallback = ROLE_TO_DEFAULT_PATH[role as "admin" | "student"];
       router.replace(nextSafe || fallback);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Login failed"); // ⬅️ no `any`
+      setErr(e instanceof Error ? e.message : "Login failed");
     } finally {
-      clearTimeout(t); // make sure timer is cleared even on error
+      clearTimeout(t);
       setLoading(false);
     }
   }
@@ -121,11 +123,11 @@ export default function LoginPage() {
         onSubmit={onSubmit}
         className="w-full max-w-[420px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
       >
-        {/* Hero with background photo AND inline logo that overlaps downward */}
+        {/* Header with background and logo */}
         <div
           className="relative h-28 sm:h-32 bg-slate-200"
           style={{
-            backgroundImage: "url('/bg.jpg')", // change if your file name differs
+            backgroundImage: "url('/bg.jpg')",
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
@@ -141,7 +143,7 @@ export default function LoginPage() {
           />
         </div>
 
-        {/* Content (extra top padding to clear the overlapping logo) */}
+        {/* Content */}
         <div className="px-6 pb-6 pt-16">
           <h1 className="mb-2 text-center text-2xl font-bold tracking-wide">
             WELCOME TO SIS E-BOTO
@@ -192,5 +194,14 @@ export default function LoginPage() {
         </div>
       </form>
     </main>
+  );
+}
+
+/* ---------------- Wrapper with Suspense ---------------- */
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="grid min-h-dvh place-items-center">Loading login…</div>}>
+      <LoginInner />
+    </Suspense>
   );
 }
