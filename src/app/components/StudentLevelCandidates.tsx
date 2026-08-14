@@ -2,6 +2,8 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import * as React from "react";
 
 type Level = "Elementary" | "JHS" | "SHS" | "College";
@@ -59,17 +61,20 @@ function extractExistingId(u: unknown): string | null {
   if (isObject(ex) && typeof ex.candidateId === "string") return ex.candidateId;
   return null;
 }
-
 const StudentLevelCandidates: React.FC<Props> = ({
   items,
   voted,
   canVote = true,
 }) => {
+  const router = useRouter();
   const [mounted, setMounted] = React.useState(false);
-  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [submitting, setSubmitting] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [myVotes, setMyVotes] = React.useState<Record<string, string>>(
     voted || {}
+  );
+  const [selections, setSelections] = React.useState<Record<string, string>>(
+    {}
   );
 
   React.useEffect(() => {
@@ -86,68 +91,88 @@ const StudentLevelCandidates: React.FC<Props> = ({
     [items]
   );
 
-  async function castVote(candidateId: string, position: Position) {
-    if (!candidateId) {
-      setErr("Invalid candidate. Please refresh.");
-      return;
-    }
-    if (myVotes[position]) return;
+  // Positions that still need a vote (have candidates, not yet voted)
+  const pendingPositions = React.useMemo(
+    () => grouped.filter((g) => g.items.length > 0 && !myVotes[g.pos]),
+    [grouped, myVotes]
+  );
 
-    setBusyId(candidateId);
+  const allSelected = pendingPositions.every((g) => selections[g.pos]);
+  const canSubmit =
+    canVote && pendingPositions.length > 0 && allSelected && !submitting;
+
+  const votingComplete =
+    pendingPositions.length === 0 && Object.keys(myVotes).length > 0;
+
+  function selectCandidate(position: Position, candidateId: string) {
+    if (!canVote || myVotes[position]) return;
+    setSelections((p) => ({ ...p, [position]: candidateId }));
+  }
+
+  async function submitAllVotes() {
+    if (!canSubmit) return;
+    const confirmed = window.confirm(
+      "Submit your votes now? You will not be able to change them afterward."
+    );
+    if (!confirmed) return;
+
+    setSubmitting(true);
     setErr(null);
-    try {
-      const r = await fetch("/internal/votes", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ candidateId: String(candidateId) }),
-      });
+    const failures: string[] = [];
+    const resolvedVotes: Record<string, string> = {};
 
-      // Parse as text first, then safely JSON-parse to unknown
-      const raw = await r.text();
-      let j: unknown = null;
+    for (const g of pendingPositions) {
+      const candidateId = selections[g.pos];
       try {
-        j = raw ? JSON.parse(raw) : null;
-      } catch {
-        j = null;
-      }
+        const r = await fetch("/internal/votes", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ candidateId: String(candidateId) }),
+        });
 
-      if (r.status === 201) {
-        setMyVotes((p) => ({ ...p, [position]: candidateId }));
-        return;
-      }
+        const raw = await r.text();
+        let j: unknown = null;
+        try {
+          j = raw ? JSON.parse(raw) : null;
+        } catch {
+          j = null;
+        }
 
-      if (!r.ok) {
+        if (r.status === 201) {
+          resolvedVotes[g.pos] = candidateId;
+          continue;
+        }
+
         if (r.status === 409) {
           const existingId = extractExistingId(j);
-          setMyVotes((p) =>
-            existingId ? { ...p, [position]: existingId } : p
-          );
-          setErr(
-            extractApiError(j) || `You already voted for ${position}.`
-          );
-          return;
+          if (existingId) resolvedVotes[g.pos] = existingId;
+          failures.push(extractApiError(j) || `You already voted for ${g.pos}.`);
+          continue;
         }
-        if (r.status === 401) {
-          setErr(extractApiError(j) || "Unauthorized. Please log in again.");
-          return;
-        }
-        if (r.status === 403) {
-          setErr(extractApiError(j) || "Forbidden.");
-          return;
-        }
-        setErr(extractApiError(j) || "Failed to submit vote.");
-        return;
-      }
 
-      // Fallback (shouldn't reach here because 201 already handled)
-      setErr(null);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Network error.";
-      setErr(msg);
-    } finally {
-      setBusyId(null);
+        failures.push(extractApiError(j) || `Failed to submit vote for ${g.pos}.`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Network error.";
+        failures.push(`${g.pos}: ${msg}`);
+      }
     }
+
+    if (Object.keys(resolvedVotes).length > 0) {
+      setMyVotes((p) => ({ ...p, ...resolvedVotes }));
+    }
+
+    const nowComplete = pendingPositions.every(
+      (g) => resolvedVotes[g.pos] || myVotes[g.pos]
+    );
+    setSubmitting(false);
+
+    if (nowComplete) {
+      router.push("/student-dashboard/receipt");
+      return;
+    }
+
+    if (failures.length > 0) setErr(failures.join(" "));
   }
 
   return (
@@ -185,6 +210,8 @@ const StudentLevelCandidates: React.FC<Props> = ({
                     const chosenId = myVotes[c.position];
                     const isChosen = chosenId === c.id;
                     const locked = Boolean(chosenId);
+                    const isSelected = selections[c.position] === c.id;
+                    const selectable = canVote && !locked;
 
                     return (
                       <article
@@ -193,6 +220,10 @@ const StudentLevelCandidates: React.FC<Props> = ({
                           mounted
                             ? "opacity-100 translate-y-0"
                             : "opacity-0 translate-y-4"
+                        } ${
+                          isChosen || isSelected
+                            ? "border-[#0F4C75] ring-2 ring-[#0F4C75]/40"
+                            : ""
                         } hover:shadow-md`}
                         style={{
                           transitionDuration: "450ms",
@@ -237,36 +268,43 @@ const StudentLevelCandidates: React.FC<Props> = ({
                             </div>
                           )}
 
-                          {/* BUTTON */}
+                          {/* RADIO SELECT */}
                           <div className="mt-auto pt-3">
-                            <button
-                              onClick={() => castVote(c.id, c.position)}
-                              disabled={
-                                !canVote ||
-                                (locked && !isChosen) ||
-                                busyId === c.id
-                              }
-                              className={`inline-flex w-full items-center justify-center rounded-md px-3 py-2 text-sm font-medium transition
+                            <label
+                              className={`flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition
                                 ${
                                   !canVote
                                     ? "bg-gray-300 text-gray-700 cursor-not-allowed"
                                     : isChosen
-                                    ? "bg-green-600 text-white hover:bg-green-700"
+                                    ? "bg-green-600 text-white"
                                     : locked
                                     ? "bg-gray-300 text-gray-700 cursor-not-allowed"
-                                    : "bg-[#0F4C75] text-white hover:bg-[#0C3D5E]"
+                                    : isSelected
+                                    ? "bg-[#0C3D5E] text-white cursor-pointer"
+                                    : "bg-[#0F4C75] text-white hover:bg-[#0C3D5E] cursor-pointer"
                                 }`}
                             >
+                              <input
+                                type="radio"
+                                name={`vote-${c.position}`}
+                                value={c.id}
+                                checked={isChosen || isSelected}
+                                disabled={!selectable || submitting}
+                                onChange={() =>
+                                  selectCandidate(c.position, c.id)
+                                }
+                                className="h-4 w-4 accent-white"
+                              />
                               {!canVote
                                 ? "Voting Closed"
-                                : busyId === c.id
-                                ? "Submitting…"
                                 : isChosen
                                 ? "Voted"
                                 : locked
                                 ? "Already Voted"
-                                : "Vote"}
-                            </button>
+                                : isSelected
+                                ? "Selected"
+                                : "Select"}
+                            </label>
                           </div>
                         </div>
                       </article>
@@ -276,6 +314,43 @@ const StudentLevelCandidates: React.FC<Props> = ({
               </div>
             </section>
           )
+      )}
+
+      {pendingPositions.length > 0 && (
+        <div className="sticky bottom-4 z-10 rounded-xl border border-gray-200 bg-white p-4 shadow-lg">
+          <p className="text-center text-sm text-gray-700">
+            {allSelected
+              ? "You've selected a candidate for every position. Submit to cast your votes — this cannot be undone."
+              : `Select a candidate for every position before you can submit. ${
+                  pendingPositions.filter((g) => !selections[g.pos]).length
+                } of ${pendingPositions.length} position(s) still need a selection.`}
+          </p>
+          <button
+            onClick={submitAllVotes}
+            disabled={!canSubmit}
+            className={`mx-auto mt-3 flex w-full max-w-xs items-center justify-center rounded-md px-4 py-2 text-sm font-semibold transition sm:w-auto ${
+              canSubmit
+                ? "bg-green-600 text-white hover:bg-green-700"
+                : "bg-gray-300 text-gray-600 cursor-not-allowed"
+            }`}
+          >
+            {submitting ? "Submitting…" : "Submit All Votes"}
+          </button>
+        </div>
+      )}
+
+      {votingComplete && (
+        <div className="sticky bottom-4 z-10 rounded-xl border border-green-200 bg-green-50 p-4 shadow-lg">
+          <p className="text-center text-sm text-green-800">
+            Thank you for voting! View your receipt as proof of your submitted votes.
+          </p>
+          <Link
+            href="/student-dashboard/receipt"
+            className="mx-auto mt-3 flex w-full max-w-xs items-center justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700 sm:w-auto"
+          >
+            View Receipt
+          </Link>
+        </div>
       )}
     </div>
   );

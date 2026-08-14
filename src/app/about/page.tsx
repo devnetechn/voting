@@ -113,7 +113,7 @@ export default function AboutPage() {
       {/* CONTENT */}
       <main className="mx-auto max-w-[1100px] px-6 pb-16">
         {/* Mission / Copy */}
-        <section className="mt-8 grid gap-6 md:grid-cols-3">
+        <section className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
           <div className="rounded-2xl border border-slate-200 bg-white p-6">
             <h2 className="text-base font-semibold">Our Mission</h2>
             <p className="mt-2 text-sm text-slate-600">
@@ -147,7 +147,7 @@ export default function AboutPage() {
             <p className="text-sm text-slate-500">2025</p>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {TEAM.map((m) => (
               <TeamCard key={m.name} m={m} />
             ))}

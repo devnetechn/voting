@@ -180,7 +180,7 @@ export default async function StudentDashboard() {
 
       {/* HERO – no border, same BG to avoid black line */}
       <header className="w-full bg-slate-50">
-        <div className="max-w-[1200px] mx-auto px-6 py-12 text-center">
+        <div className="max-w-[1200px] mx-auto px-6 py-8 text-center sm:py-12">
           <Image
             src="/stratford logo.png"
             alt="Stratford International School Logo"
@@ -189,9 +189,9 @@ export default async function StudentDashboard() {
             priority
             className="mx-auto h-40 w-40 sm:h-56 sm:w-56 object-contain"
           />
-          <h1 className="mt-6 text-3xl sm:text-5xl font-semibold tracking-tight">
+          <h1 className="mt-4 text-2xl font-semibold tracking-tight sm:mt-6 sm:text-3xl md:text-5xl">
             Stratford International School
-            <br /> E-Boto
+            <br className="hidden sm:block" /> E-Boto
           </h1>
           <p className="mt-3 text-sm sm:text-base text-gray-600">
             Safe <span className="mx-1">•</span> Reliable <span className="mx-1">•</span> Secure <span className="mx-1">•</span> Fast
