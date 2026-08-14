@@ -21,7 +21,8 @@ const ROLE_TO_DEFAULT_PATH: Record<"admin" | "student", string> = {
 };
 
 // ✅ Use API URL from .env
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:4000";
+const API_URL = `${API_BASE}/api`;
 
 /* ---------------- Client Inner Component ---------------- */
 function LoginInner() {
