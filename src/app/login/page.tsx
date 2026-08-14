@@ -20,9 +20,10 @@ const ROLE_TO_DEFAULT_PATH: Record<"admin" | "student", string> = {
   student: "/student-dashboard",
 };
 
-// ✅ Use API URL from .env
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:4000";
-const API_URL = `${API_BASE}/api`;
+// ✅ Relative path so requests go through the Next.js rewrite proxy
+// (keeps the session cookie scoped to this site's own domain, matching
+// how the server components read it via next/headers `cookies()`).
+const API_URL = "/api";
 
 /* ---------------- Client Inner Component ---------------- */
 function LoginInner() {
@@ -75,7 +76,8 @@ function LoginInner() {
     setErr(null);
 
     const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 8000);
+    // Render free-tier backend can cold-start for 30-50s when idle
+    const t = setTimeout(() => controller.abort(), 45000);
 
     try {
       const r = await fetch(`${API_URL}/auth/login`, {

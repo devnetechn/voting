@@ -205,7 +205,8 @@ export default async function DashboardPage() {
           </a>
 
           {/* 🔴 Danger action */}
-          <ResetVotesButton apiBase={apiBase} />
+          {/* force relative "/api/..." so the browser sends the same-origin session cookie */}
+          <ResetVotesButton apiBase="" />
         </div>
       </main>
     </>
