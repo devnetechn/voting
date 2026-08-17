@@ -197,6 +197,13 @@ function LoginInner() {
           >
             {loading ? "Signing in..." : "LOGIN"}
           </button>
+
+          <a
+            href="/candidate-details"
+            className="mt-2 block w-full rounded-lg border border-slate-300 px-4 py-2.5 text-center text-slate-700 transition hover:bg-slate-50"
+          >
+            See Candidate Details
+          </a>
         </div>
       </form>
     </main>

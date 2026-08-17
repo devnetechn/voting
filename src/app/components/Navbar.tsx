@@ -84,14 +84,24 @@ export default function Navbar() {
         )}
 
         {role === "student" && (
-          <Link
-            href="/student/change-profile"
-            prefetch={false}
-            className={linkClass}
-            onClick={onNavigate}
-          >
-            Profile
-          </Link>
+          <>
+            <Link
+              href="/student/change-profile"
+              prefetch={false}
+              className={linkClass}
+              onClick={onNavigate}
+            >
+              Profile
+            </Link>
+            <Link
+              href="/results"
+              prefetch={false}
+              className={linkClass}
+              onClick={onNavigate}
+            >
+              Candidate Scores
+            </Link>
+          </>
         )}
 
         <Link href="/about" className={linkClass} onClick={onNavigate}>

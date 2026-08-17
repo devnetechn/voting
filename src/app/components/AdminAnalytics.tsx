@@ -75,7 +75,7 @@ function isPosition(x: string): x is Position {
 export default function AdminAnalytics({
   stats,
   candidatesRaw,
-  voteTallies,
+  voteTallies: voteTalliesInitial,
   votingOpenInitial,
 }: {
   stats: Stats;
@@ -87,6 +87,28 @@ export default function AdminAnalytics({
   const [posFilter, setPosFilter] = React.useState<"All" | Position>(
     "President"
   );
+
+  // ✅ NEW: live-updating tally (polls every 5s, no page reload needed)
+  const [voteTallies, setVoteTallies] = React.useState<CandVoteCount[]>(
+    voteTalliesInitial
+  );
+  React.useEffect(() => {
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      try {
+        const r = await fetch("/internal/votes/stats", { cache: "no-store" });
+        if (!r.ok) return;
+        const data = (await r.json()) as CandVoteCount[];
+        if (!cancelled && Array.isArray(data)) setVoteTallies(data);
+      } catch {
+        // ignore transient network errors; next tick will retry
+      }
+    }, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   // voting toggle state
   const [votingOpen, setVotingOpen] =
@@ -143,6 +165,47 @@ export default function AdminAnalytics({
       byGender,
     };
   }, [filteredCands]);
+
+  // ✅ NEW: export the full tally (all levels/positions) as CSV
+  function exportCsv() {
+    const header = ["Level", "Position", "Candidate", "Party", "Votes"];
+    const rows = voteTallies
+      .slice()
+      .sort(
+        (a, b) =>
+          a.level.localeCompare(b.level) ||
+          a.position.localeCompare(b.position) ||
+          b.votes - a.votes
+      )
+      .map((c) => {
+        const fullName = `${c.firstName} ${
+          c.middleName ? c.middleName + " " : ""
+        }${c.lastName}`.trim();
+        return [
+          c.level,
+          c.position,
+          fullName,
+          c.partyList && c.partyList.trim() ? c.partyList : "Independent",
+          String(c.votes),
+        ];
+      });
+
+    const escapeCsv = (v: string) =>
+      /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const csv = [header, ...rows]
+      .map((r) => r.map(escapeCsv).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `vote-tally-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   const fmt = (n: number) => n.toLocaleString();
   const fmtPct = (n: number) => `${n.toFixed(1)}%`;
@@ -356,9 +419,19 @@ export default function AdminAnalytics({
       <div className="rounded-xl border border-gray-200 bg-white p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold">Voting Statistics</h3>
-          <div className="text-sm text-gray-600">
-            {levelFilter !== "All" ? `${levelFilter} • ` : "All levels • "}
-            {posFilter !== "All" ? posFilter : "All positions"}
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-gray-600">
+              {levelFilter !== "All" ? `${levelFilter} • ` : "All levels • "}
+              {posFilter !== "All" ? posFilter : "All positions"}
+            </div>
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-100"
+              title="Download the full vote tally (all levels/positions) as CSV"
+            >
+              Export CSV
+            </button>
           </div>
         </div>
 
